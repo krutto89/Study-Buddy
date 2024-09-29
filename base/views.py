@@ -72,7 +72,10 @@ def home(request):
             )
     topics = Topic.objects.all()
     room_count = rooms.count()
-    context = {'rooms': rooms , 'topics': topics , 'room_count':room_count}
+    room_messages = Message.objects.filter( 
+            Q(room__topic__name__icontains=q))
+    
+    context = {'rooms': rooms , 'topics': topics , 'room_count':room_count , 'room_messages': room_messages}
     return render(request, 'base/home.html' , context)
 
 def room(request, pk):
@@ -81,7 +84,7 @@ def room(request, pk):
     # #     if i['id'] ==int(pk):
     # #         room = i
     room = Room.objects.get(id=pk)
-    room_messages = room.message_set.all().order_by('-created')
+    room_messages = room.message_set.all()
 
     participants = room.participants.all()
 
@@ -97,6 +100,15 @@ def room(request, pk):
 
     return render(request, 'base/room.html' , context)
 
+# @login_required(login_url='login')
+def userProfile (request, pk):
+    user = User.objects.get(id=pk)
+    rooms = user.room_set.all()
+    room_messages = user.message_set.all()
+    topics = Topic.objects.all()
+    context = {'user': user, 'rooms': rooms, 'room_messages': room_messages, 'topics': topics}
+    return render(request, 'base/profile.html', context)
+
 @login_required(login_url='login')
 def createRoom(request):
     form = RoomForm()
@@ -105,7 +117,9 @@ def createRoom(request):
         form = RoomForm(request.POST) #adding the data to the form 
         #print(request.POST)
         if form.is_valid():
-            form.save()
+            room =form.save(commit=False)
+            room.host = request.user
+            room.save()
             return redirect('home')
 
     context = {'form': form}
@@ -141,4 +155,14 @@ def deleteRoom(request , pk):
     
     return render(request, 'base/delete.html' , {'obj':room})
 
+@login_required(login_url='login')
+def deleteMessage(request, pk):
+    message = Message.objects.get(id=pk)
+
+    if request.user!= message.user:
+        return HttpResponse('You are not authorized to delete this message')
+    if request.method == 'POST':
+        message.delete()
+        return redirect('home')
     
+    return render(request, 'base/delete.html' , {'obj':message})
